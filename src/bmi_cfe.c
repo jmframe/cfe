@@ -70,7 +70,7 @@ Variable var_info[] = {
 	// Vars in et_struct
 	//--------------------
 	{ 32, "potential_et_m_per_s",        "double", 1 },
-	{ 33, "potential_et_m_per_timestep", "double", 1 },
+	{ 33, "potential_et_m_per_timestep", "double", 1 }, //TODO Doesn't appear to be used, but this is uninitialized
 	{ 34, "actual_et_m_per_timestep",    "double", 1 },
 	//------------------------------
 	// Vars in vol_tracking_struct
@@ -837,13 +837,21 @@ static int Initialize (Bmi *self, const char *file)
         changing the name to the more general "direct runoff"
     cfe_bmi_data_ptr->flux_Schaake_output_runoff_m = malloc(sizeof(double));*/
     cfe_bmi_data_ptr->flux_output_direct_runoff_m  = malloc(sizeof(double));
-
+    *cfe_bmi_data_ptr->flux_output_direct_runoff_m = 0.0;
     cfe_bmi_data_ptr->flux_Qout_m = malloc(sizeof(double));
+    *cfe_bmi_data_ptr->flux_Qout_m = 0.0;
     cfe_bmi_data_ptr->flux_from_deep_gw_to_chan_m = malloc(sizeof(double));
+    *cfe_bmi_data_ptr->flux_from_deep_gw_to_chan_m = 0.0;
     cfe_bmi_data_ptr->flux_giuh_runoff_m = malloc(sizeof(double));
+    *cfe_bmi_data_ptr->flux_giuh_runoff_m = 0.0;
     cfe_bmi_data_ptr->flux_lat_m = malloc(sizeof(double));
+    *cfe_bmi_data_ptr->flux_lat_m = 0.0;
     cfe_bmi_data_ptr->flux_nash_lateral_runoff_m = malloc(sizeof(double));
+    *cfe_bmi_data_ptr->flux_nash_lateral_runoff_m = 0.0;
     cfe_bmi_data_ptr->flux_perc_m = malloc(sizeof(double));
+    //This needs an initial value, it is used in computations in CFE and only set towards the end of the model
+    //See issue #31
+    *cfe_bmi_data_ptr->flux_perc_m = 0.0;
 
     /*******************************************************
        JMFRAME: Check to see where forcings come from
@@ -854,7 +862,9 @@ static int Initialize (Bmi *self, const char *file)
     if (strcmp(cfe_bmi_data_ptr->forcing_file, "BMI") == 0){
         cfe_bmi_data_ptr->is_forcing_from_bmi = TRUE;
         cfe_bmi_data_ptr->forcing_data_precip_kg_per_m2 = malloc(sizeof(double));
+        *cfe_bmi_data_ptr->forcing_data_precip_kg_per_m2 = 0.0;
         cfe_bmi_data_ptr->forcing_data_time = malloc(sizeof(long));
+        *cfe_bmi_data_ptr->forcing_data_time = 0;
     }
     else
     {
@@ -974,6 +984,9 @@ static int Update (Bmi *self)
       // divide by 1000 to convert from mm/h to m w/ 1h timestep as per t-shirt_0.99f
       cfe_ptr->timestep_rainfall_input_m = cfe_ptr->forcing_data_precip_kg_per_m2[cfe_ptr->current_time_step] /1000;
     
+    //Adjust the rainfall input by a potential fraction of the time step
+    cfe_ptr->timestep_rainfall_input_m *= cfe_ptr->time_step_fraction;
+    //Accumulate volume for mass balance
     cfe_ptr->vol_struct.volin += cfe_ptr->timestep_rainfall_input_m;
     
     run_cfe(cfe_ptr);
@@ -1015,8 +1028,11 @@ static int Update_until (Bmi *self, double t)
         
         // change timestep to remaining fraction & call update()
         cfe_ptr->time_step_size = frac * dt;
+        //Record the time step fraction so `Update` can adjust input if needed
+        cfe_ptr->time_step_fraction = frac;
         Update (self);
         // set back to original
+        cfe_ptr->time_step_fraction = 1.0;
         cfe_ptr->time_step_size = dt;
     }
     
@@ -2218,7 +2234,7 @@ cfe_state_struct *new_bmi_cfe(void)
     cfe_state_struct *data;
     data = (cfe_state_struct *) malloc(sizeof(cfe_state_struct));
     data->time_step_size = 3600;
-    
+    data->time_step_fraction = 1.0;
     data->forcing_data_precip_kg_per_m2 = NULL;
     data->forcing_data_time = NULL;
     data->giuh_ordinates = NULL;
@@ -2408,6 +2424,7 @@ extern double init_reservoir_storage(int is_ratio, double amount, double max_amo
 }
 
 extern void initialize_volume_trackers(cfe_state_struct* cfe_ptr){
+    cfe_ptr->vol_struct.volin = 0;
     cfe_ptr->vol_struct.vol_runoff = 0;
     cfe_ptr->vol_struct.vol_infilt = 0;
     cfe_ptr->vol_struct.vol_to_soil = 0;
