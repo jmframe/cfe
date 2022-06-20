@@ -102,6 +102,9 @@ double wilting_point_m;
 struct evapotranspiration_structure {
     double potential_et_m_per_s;
     double potential_et_m_per_timestep;
+    double reduced_potential_et_m_per_timestep;
+    double actual_et_from_rain_m_per_timestep;
+    double actual_et_from_soil_m_per_timestep;
     double actual_et_m_per_timestep;
 };
 typedef struct evapotranspiration_structure evapotranspiration_structure;
@@ -125,6 +128,9 @@ struct massbal
     double vol_soil_to_lat_flow;
     double vol_soil_to_gw      ;  // this should equal vol_to_gw
     double vol_soil_end        ;
+    double vol_et_from_soil    ;
+    double vol_et_from_rain    ; 
+    double vol_et_to_atm       ;   
     double volin               ;
     double volout              ;
     double volend              ;
@@ -206,7 +212,8 @@ extern void cfe(
         double *nash_storage_arr,
         struct evapotranspiration_structure *evap_struct,
         double *Qout_m_ptr,
-        struct massbal *massbal_struct
+        struct massbal *massbal_struct,
+        double time_step_size
     );
 
 #endif //CFE_CFE_H
